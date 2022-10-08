@@ -1,6 +1,8 @@
+import { HttpService } from '@nestjs/axios';
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model } from 'mongoose';
+import { firstValueFrom } from 'rxjs';
 import { IComment } from './comments.schema';
 import { CreateCommentDto } from './dto/create-comment.dto';
 import { UpdateCommentDto } from './dto/update-comment.dto';
@@ -8,16 +10,26 @@ import { UpdateCommentDto } from './dto/update-comment.dto';
 @Injectable()
 export class CommentsService {
   constructor(
+    private httpService: HttpService,
     @InjectModel('Comment')
     private commentModel: Model<IComment>,
   ) {}
 
   async create(createCommentDto: CreateCommentDto) {
-    const newComment = new this.commentModel(createCommentDto);
+    try {
+      await firstValueFrom(
+        this.httpService.get(
+          `https://api.github.com/users/${createCommentDto.user_id}`,
+        ),
+      );
+      const newComment = new this.commentModel(createCommentDto);
 
-    const savedComment = await newComment.save();
+      const savedComment = await newComment.save();
 
-    return savedComment;
+      return savedComment;
+    } catch (err) {
+      throw new NotFoundException('Card não encontrado');
+    }
   }
 
   async findAll() {
