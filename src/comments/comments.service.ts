@@ -1,73 +1,74 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
+import { InjectModel } from '@nestjs/mongoose';
+import { Model } from 'mongoose';
+import { IComment } from './comments.schema';
 import { CreateCommentDto } from './dto/create-comment.dto';
 import { UpdateCommentDto } from './dto/update-comment.dto';
-import { CommentEntity } from './entities/comment.entity';
 
 @Injectable()
 export class CommentsService {
-  private comments: CommentEntity[] = [
-    {
-      id: 1,
-      comment: 'Some comment',
-      user_id: '1',
-    },
-  ];
+  constructor(
+    @InjectModel('Comment')
+    private commentModel: Model<IComment>,
+  ) {}
 
-  create(createCommentDto: CreateCommentDto) {
-    const lastId = this.comments[this.comments.length - 1]?.id || 0;
+  async create(createCommentDto: CreateCommentDto) {
+    const newComment = new this.commentModel(createCommentDto);
 
-    const newComment = {
-      id: lastId + 1,
-      ...createCommentDto,
-    };
+    const savedComment = await newComment.save();
 
-    this.comments.push(newComment);
+    return savedComment;
   }
 
-  findAll() {
-    return this.comments;
+  async findAll() {
+    const comments = await this.commentModel.find();
+
+    return comments;
   }
 
-  findOne(id: number) {
-    const comment = this.comments.find((comment) => comment.id === +id);
+  async findOne(id: string) {
+    try {
+      const comment = await this.commentModel.findById(id);
 
-    if (!comment) {
+      if (!comment) {
+        throw new NotFoundException(`Comentário ${id} não encontrado`);
+      }
+
+      return comment;
+    } catch (err) {
       throw new NotFoundException(`Comentário ${id} não encontrado`);
     }
-
-    return comment;
   }
 
-  update(id: number, updateCommentDto: UpdateCommentDto) {
-    const comment = this.findOne(id);
+  async update(id: string, updateCommentDto: UpdateCommentDto) {
+    await this.findOne(id);
 
-    const index = this.comments.indexOf(comment);
+    await this.commentModel.findOneAndUpdate({ _id: id }, updateCommentDto);
 
-    const newComment = {
-      ...comment,
-      ...updateCommentDto,
-    };
+    const updatedComment = await this.findOne(id);
 
-    this.comments[index] = newComment;
-
-    return newComment;
+    return updatedComment;
   }
 
-  remove(id: number) {
-    const comment = this.findOne(id);
+  async remove(id: string) {
+    await this.findOne(id);
 
-    const index = this.comments.indexOf(comment);
-
-    this.comments.splice(index, 1);
+    await this.commentModel.findByIdAndDelete(id);
   }
 
-  findByUserId(id: string) {
-    const comment = this.comments.filter((comment) => comment.user_id === id);
+  async findByUserId(id: string) {
+    try {
+      const comments = await this.commentModel.find({ user_id: id });
 
-    if (!comment.length) {
-      throw new NotFoundException(`Usuário ${id} não encontrado`);
+      if (!comments.length) {
+        throw new NotFoundException(
+          `Comentário do usuario ${id} não encontrado`,
+        );
+      }
+
+      return comments;
+    } catch (err) {
+      throw new NotFoundException(`Comentário do usuario ${id} não encontrado`);
     }
-
-    return comment;
   }
 }
